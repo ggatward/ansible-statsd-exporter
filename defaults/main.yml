@@ -1,0 +1,7 @@
+---
+statsd_exporter_version: 0.15.0
+statsd_exporter_web_listen_address: "0.0.0.0:9102"
+statsd_exporter_listen_udp: "0.0.0.0:8125"
+statsd_exporter_listen_tcp: "0.0.0.0:8125"
+
+statsd_exporter_config_flags_extra: {}

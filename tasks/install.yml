@@ -1,0 +1,63 @@
+---
+- name: Install dependencies
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ statsd_exporter_dependencies }}"
+
+- name: Create the statsd_exporter group
+  group:
+    name: "{{ statsd_exporter_system_group }}"
+    state: present
+    system: true
+
+- name: Create the statsd_exporter user
+  user:
+    name: "{{ statsd_exporter_system_user }}"
+    groups: "{{ statsd_exporter_system_group }}"
+    append: true
+    shell: /usr/sbin/nologin
+    system: true
+    createhome: false
+    home: /
+
+- name: Download statsd_exporter binary to local folder
+  become: false
+  get_url:
+    url: "https://github.com/prometheus/statsd_exporter/releases/download/v{{ statsd_exporter_version }}/statsd_exporter-{{ statsd_exporter_version }}.linux-{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}.tar.gz"
+    dest: "/tmp/statsd_exporter-{{ statsd_exporter_version }}.linux-{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}.tar.gz"
+    checksum: "sha256:{{ statsd_exporter_checksum }}"
+  register: _download_binary
+  until: _download_binary is succeeded
+  retries: 5
+  delay: 2
+  delegate_to: localhost
+  check_mode: false
+
+- name: Unpack statsd_exporter binary
+  become: false
+  unarchive:
+    src: "/tmp/statsd_exporter-{{ statsd_exporter_version }}.linux-{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}.tar.gz"
+    dest: "/tmp"
+    creates: "/tmp/statsd_exporter-{{ statsd_exporter_version }}.linux-{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}/statsd_exporter"
+  delegate_to: localhost
+  check_mode: false
+
+- name: Propagate statsd_exporter binaries
+  copy:
+    src: "/tmp/statsd_exporter-{{ statsd_exporter_version }}.linux-{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}/statsd_exporter"
+    dest: "/usr/local/bin/statsd_exporter"
+    mode: 0750
+    owner: "{{ statsd_exporter_system_user }}"
+    group: "{{ statsd_exporter_system_group }}"
+  notify: restart statsd_exporter
+  when: not ansible_check_mode
+
+- name: Copy the statsd_exporter systemd service file
+  template:
+    src: statsd_exporter.service.j2
+    dest: /etc/systemd/system/statsd_exporter.service
+    owner: root
+    group: root
+    mode: 0644
+  notify: restart statsd_exporter
